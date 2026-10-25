@@ -61,17 +61,6 @@
   @media(max-width:380px){h1{font-size:22px}.card{padding:28px 18px}}
 </style>
 
-<!-- ===== Meta Pixel ===== -->
-<script>
-!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','1746714973297764');
-fbq('track','PageView');
-</script>
-<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1746714973297764&ev=PageView&noscript=1"/></noscript>
 </head>
 <body>
 
@@ -115,22 +104,469 @@ fbq('track','PageView');
     <li>50000+ Subscribers Trust Us Already</li>
   </ul>
   <br>
-  <a class="btn tg-join" href="https://t.me/+-VfdkDpsOT9mNGQ1">JOIN FREE TELEGRAM</a>
+  <a class="btn join-link" href="https://t.me/+-VfdkDpsOT9mNGQ1">JOIN FREE TELEGRAM</a>
   <p class="disc">Disclaimer: This channel is for educational and informational purposes only. We do not provide investment advice or guaranteed returns. Trading in the stock market involves risk. Please consult your financial advisor before making any investment decisions.</p>
   <p class="credit"><a href="https://t.me/srsagency" target="_blank" rel="noopener">Ads managed by SRS Tech Agency</a></p>
 </main>
 
 <script>
-(function(){
-  var TG='https://t.me/+-VfdkDpsOT9mNGQ1';
-  var sent=false;
-  document.querySelectorAll('.tg-join').forEach(function(a){
-    a.addEventListener('click',function(e){
-      e.preventDefault();
-      if(!sent && typeof fbq==='function'){ fbq('track','Subscribe'); sent=true; }
-      setTimeout(function(){ window.location.href=TG; },350);
+(() => {
+    'use strict';
+
+    /* ==============================
+       CONFIGURATION
+    ============================== */
+
+    const CONFIG = Object.freeze({
+        pixelId: '1746714973297764',
+        telegramUrl: 'https://t.me/+-VfdkDpsOT9mNGQ1',
+
+        // Visitor qualification
+        pageViewDelayMs: 3000,
+        passiveReaderDelayMs: 8000,
+
+        // Telegram click qualification
+        minimumClickTimeMs: 1000,
+
+        // Redirect delays
+        trackedRedirectDelayMs: 700,
+        fastRedirectDelayMs: 50,
+
+        // Prevent duplicate PageView in same session
+        pageViewSessionKey: 'gautamjha_qualified_page_view'
     });
-  });
+
+
+    /* ==============================
+       STATE
+    ============================== */
+
+    const pageOpenedAt = Date.now();
+
+    let pageViewTracked = false;
+    let subscribeTracked = false;
+    let navigationStarted = false;
+    let humanInteractionDetected = false;
+
+
+    /* ==============================
+       LOAD META PIXEL
+    ============================== */
+
+    function loadMetaPixel() {
+
+        const pixelGuardKey =
+            `__gautamJhaPixelInitialized_${CONFIG.pixelId}`;
+
+        !function (f, b, e, v, n, t, s) {
+
+            if (f.fbq) return;
+
+            n = f.fbq = function () {
+
+                n.callMethod
+                    ? n.callMethod.apply(n, arguments)
+                    : n.queue.push(arguments);
+
+            };
+
+            if (!f._fbq) {
+                f._fbq = n;
+            }
+
+            n.push = n;
+            n.loaded = true;
+            n.version = '2.0';
+            n.queue = [];
+
+            t = b.createElement(e);
+            t.async = true;
+            t.src = v;
+
+            s = b.getElementsByTagName(e)[0];
+
+            s.parentNode.insertBefore(t, s);
+
+        }(
+            window,
+            document,
+            'script',
+            'https://connect.facebook.net/en_US/fbevents.js'
+        );
+
+
+        /* Prevent duplicate Pixel initialization */
+
+        if (window[pixelGuardKey]) {
+            return;
+        }
+
+        let pixelAlreadyRegistered = false;
+
+        try {
+
+            if (
+                typeof fbq !== 'undefined' &&
+                typeof fbq.getState === 'function'
+            ) {
+
+                const pixelState = fbq.getState();
+
+                pixelAlreadyRegistered =
+                    pixelState.pixels.some((pixel) => {
+
+                        return String(pixel.id) ===
+                            String(CONFIG.pixelId);
+
+                    });
+            }
+
+        } catch (error) {
+
+            pixelAlreadyRegistered = false;
+
+        }
+
+
+        if (!pixelAlreadyRegistered) {
+
+            fbq('init', CONFIG.pixelId);
+
+        }
+
+        window[pixelGuardKey] = true;
+    }
+
+
+    /* ==============================
+       SESSION PAGEVIEW CHECK
+    ============================== */
+
+    function sessionPageViewExists() {
+
+        try {
+
+            return sessionStorage.getItem(
+                CONFIG.pageViewSessionKey
+            ) === 'true';
+
+        } catch (error) {
+
+            return false;
+
+        }
+    }
+
+
+    function saveSessionPageView() {
+
+        try {
+
+            sessionStorage.setItem(
+                CONFIG.pageViewSessionKey,
+                'true'
+            );
+
+        } catch (error) {
+
+            // Ignore storage errors
+
+        }
+    }
+
+
+    /* ==============================
+       BASIC AUTOMATION CHECK
+    ============================== */
+
+    function automationDetected() {
+
+        return navigator.webdriver === true;
+
+    }
+
+
+    /* ==============================
+       QUALIFIED PAGE VIEW
+    ============================== */
+
+    function tryQualifiedPageView() {
+
+        const timeOnPageMs =
+            Date.now() - pageOpenedAt;
+
+
+        // User interacted and stayed at least 3 seconds
+        const interactionQualified =
+
+            humanInteractionDetected &&
+            timeOnPageMs >= CONFIG.pageViewDelayMs;
+
+
+        // Or visitor stayed focused for 8 seconds
+        const passiveReaderQualified =
+
+            timeOnPageMs >=
+            CONFIG.passiveReaderDelayMs;
+
+
+        const canTrack =
+
+            !pageViewTracked &&
+
+            !sessionPageViewExists() &&
+
+            !automationDetected() &&
+
+            (
+                interactionQualified ||
+                passiveReaderQualified
+            ) &&
+
+            document.visibilityState === 'visible' &&
+
+            document.hasFocus() &&
+
+            typeof window.fbq === 'function';
+
+
+        if (!canTrack) {
+            return;
+        }
+
+
+        /* Send PageView */
+
+        fbq('track', 'PageView', {
+
+            qualified_view: true,
+
+            human_interaction:
+                humanInteractionDetected,
+
+            qualification:
+                interactionQualified
+                    ? 'interaction_3_seconds'
+                    : 'focused_8_seconds',
+
+            time_on_page:
+                Math.round(timeOnPageMs / 1000)
+
+        });
+
+
+        pageViewTracked = true;
+
+        saveSessionPageView();
+    }
+
+
+    /* ==============================
+       HUMAN INTERACTION
+    ============================== */
+
+    function recordHumanInteraction(event) {
+
+        if (
+            !event.isTrusted ||
+            humanInteractionDetected
+        ) {
+            return;
+        }
+
+
+        humanInteractionDetected = true;
+
+        tryQualifiedPageView();
+    }
+
+
+    function initializeVisitorQualification() {
+
+        const interactionEvents = [
+
+            'pointerdown',
+            'touchstart',
+            'keydown',
+            'scroll',
+            'mousemove'
+
+        ];
+
+
+        interactionEvents.forEach((eventName) => {
+
+            window.addEventListener(
+                eventName,
+                recordHumanInteraction,
+                {
+                    passive: true,
+                    once: true
+                }
+            );
+
+        });
+
+
+        /* Check after 3 seconds */
+
+        window.setTimeout(
+            tryQualifiedPageView,
+            CONFIG.pageViewDelayMs
+        );
+
+
+        /* Check passive visitor after 8 seconds */
+
+        window.setTimeout(
+            tryQualifiedPageView,
+            CONFIG.passiveReaderDelayMs
+        );
+    }
+
+
+    /* ==============================
+       TELEGRAM CLICK
+    ============================== */
+
+    function handleTelegramClick(event) {
+
+        event.preventDefault();
+
+
+        // Prevent multiple clicks
+        if (navigationStarted) {
+            return;
+        }
+
+
+        navigationStarted = true;
+
+
+        const timeOnPageMs =
+            Date.now() - pageOpenedAt;
+
+
+        const isQualifiedClick =
+
+            event.isTrusted &&
+
+            !automationDetected() &&
+
+            timeOnPageMs >=
+                CONFIG.minimumClickTimeMs;
+
+
+        /* ==========================
+           META SUBSCRIBE EVENT
+        ========================== */
+
+        if (
+
+            isQualifiedClick &&
+
+            !subscribeTracked &&
+
+            typeof window.fbq === 'function'
+
+        ) {
+
+            fbq('track', 'Subscribe', {
+
+                value: 0,
+
+                currency: 'INR',
+
+                destination: 'Telegram',
+
+                time_on_page:
+                    Math.round(
+                        timeOnPageMs / 1000
+                    )
+
+            });
+
+
+            subscribeTracked = true;
+        }
+
+
+        /* ==========================
+           REDIRECT TO TELEGRAM
+        ========================== */
+
+        const redirectDelay =
+            isQualifiedClick
+                ? CONFIG.trackedRedirectDelayMs
+                : CONFIG.fastRedirectDelayMs;
+
+
+        window.setTimeout(() => {
+
+            window.location.assign(
+                CONFIG.telegramUrl
+            );
+
+        }, redirectDelay);
+    }
+
+
+    /* ==============================
+       INITIALIZE TELEGRAM BUTTONS
+    ============================== */
+
+    function initializeTelegramButtons() {
+
+        const buttons =
+            document.querySelectorAll(
+                '.join-link, .jnBtn'
+            );
+
+
+        buttons.forEach((button) => {
+
+            /* Force correct Telegram URL */
+
+            button.href =
+                CONFIG.telegramUrl;
+
+
+            /* Track click */
+
+            button.addEventListener(
+                'click',
+                handleTelegramClick
+            );
+
+        });
+    }
+
+
+  
+
+    loadMetaPixel();
+
+    initializeVisitorQualification();
+
+
+    if (
+        document.readyState === 'loading'
+    ) {
+
+        document.addEventListener(
+            'DOMContentLoaded',
+            initializeTelegramButtons,
+            {
+                once: true
+            }
+        );
+
+    } else {
+
+        initializeTelegramButtons();
+
+    }
+
 })();
 </script>
 </body>
